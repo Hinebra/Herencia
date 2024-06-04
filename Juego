@@ -1,0 +1,807 @@
+#include <iostream>
+#include <ctime>
+#include <cstdlib>
+#include <string>
+#include <map>
+#include <vector>
+#include <algorithm>
+#include <fstream>
+#include <sstream>
+
+using namespace std;
+
+
+class Personaje {
+private:
+    string nombre;
+    int vida;
+    map<string, map<string, string>> inventario;
+
+public:
+    Personaje(string nombre, int vida) : nombre(nombre), vida(vida) {}
+
+    string getNombre() const {
+        return nombre;
+    }
+
+    void setNombre(const string& nuevoNombre) {
+        nombre = nuevoNombre;
+    }
+
+    int getVida() const {
+        return vida;
+    }
+
+    void setVida(int nuevaVida) {
+        vida = nuevaVida;
+    }
+
+    map<string, map<string, string>>& getInventario() {
+        return inventario;
+    }
+
+    void usarObjeto(string objeto, int& stat) {
+        if (inventario.find(objeto) != inventario.end()) {
+            if (inventario[objeto]["tipo"] == "pocion") {
+                stat += stoi(inventario[objeto]["cantidad"]);
+                cout << "Usas " << objeto << " y recuperas " << inventario[objeto]["cantidad"] << " puntos de vida." << endl;
+                inventario.erase(objeto); 
+            }
+        }
+        else {
+            cout << "No tienes " << objeto << " en tu inventario." << endl;
+        }
+    }
+};
+
+class Enemigo {
+private:
+    string nombre;
+    int vida;
+
+public:
+    Enemigo(string nombre, int vida) : nombre(nombre), vida(vida) {}
+
+    string getNombre() const {
+        return nombre;
+    }
+
+    void setNombre(const string& nuevoNombre) {
+        nombre = nuevoNombre;
+    }
+
+    int getVida() const {
+        return vida;
+    }
+
+    void setVida(int nuevaVida) {
+        vida = nuevaVida;
+    }
+};
+
+class Boss : public Enemigo {
+private:
+    int ataqueEspecial;
+
+public:
+    Boss(string nombre, int vida, int ataqueEspecial)
+        : Enemigo(nombre, vida), ataqueEspecial(ataqueEspecial) {}
+
+    int getAtaqueEspecial() const {
+        return ataqueEspecial;
+    }
+
+    void setAtaqueEspecial(int nuevoAtaqueEspecial) {
+        ataqueEspecial = nuevoAtaqueEspecial;
+    }
+
+    void usarAtaqueEspecial(Personaje& personaje) {
+        int damage = rand() % 20 + 10;
+        cout << "El boss " << getNombre() << " usa su ataque especial y causa " << damage << " puntos de daño." << endl;
+        personaje.setVida(personaje.getVida() - damage);
+    }
+};
+
+class EstadoJuego {
+public:
+    int x;
+    int y;
+};
+
+class Objeto {
+public:
+    string nombre;
+    string descripcion;
+    string tipo;
+    int valor;
+};
+
+
+Personaje miPersonaje("Jugador", 100);
+Enemigo miEnemigo("Enemigo", 50);
+
+const int width = 30;
+const int height = 150;
+vector<vector<char>> entorno(width, vector<char>(height, ' '));
+
+int x = 28;
+int y = 28;
+
+map<string, map<string, string>> inventario;
+bool partidasIniciadas[3] = { false, false, false };
+string archivosPartidas[3] = { "partida1.txt", "partida2.txt", "partida3.txt" };
+string archivosInventario[3] = { "inventario1.txt", "inventario2.txt", "inventario3.txt" };
+
+
+void inicializarEntorno() {
+    cout << "                       ";
+    for (int i = 0; i < width; i++) {
+        for (int j = 0; j < height; j++) {
+            entorno[i][j] = ' ';
+        }
+    }
+
+    for (int i = 0; i < width; i++) {
+        for (int j = 25; j < height; j++) {
+            if (rand() % 70 == 0) {
+                entorno[i][j] = '*';
+            }
+        }
+    }
+
+    // borde derecho
+    for (int i = 0; i < width; i++) {
+        entorno[i][149] = 'H';
+    }
+    // borde izquierdo
+    for (int i = 0; i < width; i++) {
+        entorno[i][25] = 'H';
+    }
+    // borde arriba
+    for (int i = 25; i < 149; i++) {
+        entorno[0][i] = 'H';
+    }
+    // borde abajo
+    for (int i = 25; i < 149; i++) {
+        entorno[29][i] = 'H';
+    }
+    entorno[x][y] = 'K'; 
+    entorno[15][100] = 'I'; 
+    entorno[15][104] = 'G';
+    entorno[14][104] = 'O';
+    entorno[13][104] = 'O';
+    entorno[16][104] = 'O';
+    entorno[17][104] = 'O';
+    entorno[15][105] = 'O';
+    entorno[16][105] = 'O';
+    entorno[14][105] = 'O';
+
+    entorno[17][103] = 'O';
+    entorno[17][102] = 'O';
+    entorno[17][101] = 'O';
+    entorno[17][100] = 'O';
+    entorno[17][99] = 'O';
+    entorno[17][98] = 'O';
+
+    entorno[13][103] = 'O';
+    entorno[13][102] = 'O';
+    entorno[13][101] = 'O';
+    entorno[13][100] = 'O';
+    entorno[13][99] = 'O';
+    entorno[13][98] = 'O';
+}
+
+void guardarInventario(int partidaIndex) {
+    ofstream archivo(archivosInventario[partidaIndex]);
+    if (archivo.is_open()) {
+        for (const auto& entry : inventario) {
+            archivo << entry.first << ","
+                << entry.second.at("descripcion") << ","
+                << entry.second.at("tipo") << ","
+                << entry.second.at("valor") << ","
+                << entry.second.at("cantidad") << endl;
+        }
+        archivo.close();
+        cout << "Inventario guardado exitosamente." << endl;
+    }
+    else {
+        cout << "Error al guardar el inventario." << endl;
+    }
+}
+
+void cargarInventario(int partidaIndex) {
+    ifstream archivo(archivosInventario[partidaIndex]);
+    if (archivo.is_open()) {
+        string linea;
+        while (getline(archivo, linea)) {
+            stringstream ss(linea);
+            string nombre, descripcion, tipo, valor, cantidad;
+            getline(ss, nombre, ',');
+            getline(ss, descripcion, ',');
+            getline(ss, tipo, ',');
+            getline(ss, valor, ',');
+            getline(ss, cantidad, ',');
+
+            inventario[nombre] = {
+                {"descripcion", descripcion},
+                {"tipo", tipo},
+                {"valor", valor},
+                {"cantidad", cantidad}
+            };
+        }
+        archivo.close();
+        cout << "Inventario cargado exitosamente." << endl;
+    }
+    else {
+        cout << "No se encontró un inventario guardado." << endl;
+    }
+}
+
+void guardarJuego(const EstadoJuego& estado, int partidaIndex) {
+    ofstream archivo(archivosPartidas[partidaIndex]);
+    if (archivo.is_open()) {
+        archivo << estado.x << " " << estado.y << endl;
+        archivo.close();
+        guardarInventario(partidaIndex);
+        cout << "Partida guardada exitosamente." << endl;
+    }
+    else {
+        cout << "Error al guardar la partida." << endl;
+    }
+}
+
+EstadoJuego cargarJuego(int partidaIndex) {
+    EstadoJuego estado;
+    ifstream archivo(archivosPartidas[partidaIndex]);
+    if (archivo.is_open()) {
+        archivo >> estado.x >> estado.y;
+        archivo.close();
+        cargarInventario(partidaIndex);
+        partidasIniciadas[partidaIndex] = true;
+        cout << "Partida cargada exitosamente." << endl;
+    }
+    else {
+        cout << "No se encontró una partida guardada." << endl;
+    }
+    return estado;
+}
+
+void cargarEstadoInicial() {
+    for (int i = 0; i < 3; ++i) {
+        ifstream archivoPartida(archivosPartidas[i]);
+        if (archivoPartida.is_open() && archivoPartida.peek() != ifstream::traits_type::eof()) {
+            partidasIniciadas[i] = true;
+        }
+    }
+}
+
+void dibujarEntorno() {
+    system("cls"); 
+    for (int i = 0; i < width; ++i) {
+        for (int j = 0; j < height; ++j) {
+            cout << entorno[i][j];
+        }
+        cout << endl;
+    }
+}
+
+void recogerObjeto() {
+    if (entorno[y][x] == '*') {
+        vector<Objeto> objetosDisponibles = {
+            {"Espada", "Una espada afilada", "Arma", 10},
+            {"Poción de Curación", "Restaura 20 puntos de vida", "Consumible", 0},
+            {"Arco", "Un arco para lanzar flechas", "Arma", 15},
+            {"Flechas", "Munición para arco", "Munición", 0},
+            {"Piedra de Mejora", "Incrementa permanentemente el daño", "Mejora", 5},
+            {"Lanza", "Una lanza larga", "Arma", 12},
+            {"Escudo", "Protege de los ataques enemigos", "Defensa", 0}
+        };
+
+        Objeto objeto = objetosDisponibles[rand() % objetosDisponibles.size()];
+
+        if (inventario.find(objeto.nombre) != inventario.end()) {
+            int cantidad = stoi(inventario[objeto.nombre]["cantidad"]) + 1;
+            inventario[objeto.nombre]["cantidad"] = to_string(cantidad);
+        }
+        else {
+            inventario[objeto.nombre] = {
+                {"descripcion", objeto.descripcion},
+                {"tipo", objeto.tipo},
+                {"valor", to_string(objeto.valor)},
+                {"cantidad", "1"}
+            };
+        }
+
+        entorno[y][x] = '-';
+        cout << "Has encontrado un/a " << objeto.nombre << " (" << objeto.descripcion << ") y lo has añadido al inventario." << endl;
+    }
+}
+
+void usarObjeto(const string& objetoNombre, int& danio) {
+    if (inventario.find(objetoNombre) != inventario.end()) {
+        Objeto objeto = {
+            objetoNombre,
+            inventario[objetoNombre]["descripcion"],
+            inventario[objetoNombre]["tipo"],
+            stoi(inventario[objetoNombre]["valor"])
+        };
+        if (objeto.tipo == "Arma") {
+            danio += objeto.valor;
+            cout << "Has equipado " << objeto.nombre << ". Tu daño se ha incrementado en " << objeto.valor << "." << endl;
+        }
+    }
+    else {
+        cout << "No tienes ese objeto en el inventario." << endl;
+    }
+}
+
+void menu() {
+    cout << "\nMenú:" << endl;
+    cout << "1. Usar Objeto del Inventario" << endl;
+    cout << "2. Mostrar Inventario" << endl;
+    cout << "3. Salir" << endl;
+}
+void mostrartitulo() {
+    system("cls");
+
+
+    cout << "" << endl;
+    cout << "" << endl;
+    cout << "                                                     ___    __   ___    __    ___     __    _  _   __    __ " << endl;
+    cout << "                                                    (  ,)  (  ) (  ,)  (  )  (   \\   (  )  ( )( ) (  )  (  )" << endl;
+    cout << "                                                     )  \\   )(   ) ,\\  /__\\   ) ) )  /__\\   \\\\//   )(   /__\\  " << endl;
+    cout << "                                                    (_)\\_) (__) (___/ (_)(_) (___/  (_)(_)  (__)  (__) (_)(_) " << endl;
+    cout << "" << endl;
+    cout << "" << endl;
+
+
+}
+
+void mostrarlore() {
+    mostrartitulo();
+    cout << "" << endl;
+    cout << "En la vasta peninsula de Iberia, en una epoca de espadas y escudos, se libraron las mas intensas y sangrientas batallas que el mundo habia conocido. La Batalla de los Caidos fue una de ellas, un conflicto que surgio de las cenizas de la devastadora Guerra de la Devastacion, una guerra entre Espana y Francia por los codiciados recursos del continente." << endl;
+    cout << "Hace cincuenta anyos, la Guerra de la Devastación dejo en ruinas los campos y ciudades de Espana. Francia, en su codicia, buscaba apoderarse de los ricos recursos minerales y las fertiles tierras de la peninsula. Los ejercitos espanoles, formados por diversas casas nobles, unieron sus fuerzas para defender su tierra. Sin embargo, la traicion y la desconfianza entre los linajes reales causaron más estragos que las propias batallas. Al final, un frágil tratado de paz dejo a ambos reinos agotados y vulnerables, pero con una profunda sed de revancha." << endl;
+    cout << "En este escenario de devastación y desesperanza, un nuevo conflicto se desato, conocido como la Batalla de los Caidos. Este conflicto no solo fue una lucha por los recursos, sino tambien una batalla por la redencion y la venganza. Los clanes y familias, aun llenos de rencor por las traiciones pasadas, se alzaron en armas una vez mas. La peninsula se convirtio en un campo de batalla constante, donde la linea entre amigos y enemigos era difusa y cambiaba con cada amanecer." << endl;
+    cout << "En medio de este caos, un heroe solitario emerge, un joven guerrero con habilidades excepcionales y un destino entrelazado con el futuro de su tierra. Con su espada en mano y una determinacion inquebrantable, se adentra en la guerra, enfrentando a enemigos tanto dentro como fuera de su propio reino. En su camino, encontrara aliados inesperados y enemigos implacables, mientras busca no solo proteger su hogar, sino también descubrir la verdad oculta tras la Batalla de los Caidos y la antigua guerra que la precedio." << endl;
+    cout << "En este juego de rol epico, te adentraras en la piel de este heroe, explorando un mundo lleno de peligros y misterios, donde tus decisiones determinaran el destino de la peninsula de Iberia y el legado de la Batalla de los Caídos. ¿Estas listo para escribir tu propia historia en esta tierra de espadas y sombras?" << endl;
+}
+
+void mostrarhistoria() {
+    cout << "" << endl;
+    cout << "En medio de la guerra civil en la península de Iberia, los clanes y familias se levantaron en armas, divididos por rencores antiguos y nuevas ambiciones. Los pueblos quedaron atrapados en el fuego cruzado, sus aldeas quemadas y sus cosechas destruidas." << endl;
+    cout << "En este caos, un joven héroe emergió. Armado con una espada heredada de su padre, un antiguo guerrero, juró proteger a su pueblo y restaurar la paz. Con cada batalla, su leyenda creció, atrayendo tanto a aliados leales como a enemigos peligrosos." << endl;
+    cout << "Su viaje lo llevó a través de tierras devastadas y fortalezas impenetrables, enfrentando desafíos que pusieron a prueba su valor y habilidad. Pero la verdadera batalla estaba en su corazón, donde la venganza y la justicia luchaban por prevalecer." << endl;
+    cout << "Al final, fue su determinación y nobleza lo que unió a los clanes bajo una sola bandera, poniendo fin a la guerra civil y trayendo una paz duradera a la península. La historia de este héroe se convirtió en leyenda, recordada por generaciones como un símbolo de esperanza y unidad." << endl;
+    cout << "Tú eres ese héroe. La guerra ha terminado, pero tu legado apenas comienza. ¿Estás listo para enfrentar nuevos desafíos y escribir tu propia historia?" << endl;
+}
+
+
+int lanzarDado() {
+    return rand() % 10 + 1;
+}
+
+void combate(Personaje& personaje, Enemigo& enemigo) {
+    cout << "¡Un enemigo ha aparecido! ¡Prepárate para la batalla, " << personaje.getNombre() << "!" << endl;
+
+    while (personaje.getVida() > 0 && enemigo.getVida() > 0) {
+        cout << "\nTu HP: " << personaje.getVida() << " | HP del enemigo (" << enemigo.getNombre() << "): " << enemigo.getVida() << endl;
+
+        cout << "Opciones de combate:" << endl;
+        cout << "1. Atacar" << endl;
+        cout << "2. Usar Objeto" << endl;
+        cout << "3. Mostrar inventario" << endl;
+        cout << "Elige tu acción: ";
+        int eleccion;
+        cin >> eleccion;
+
+        if (eleccion == 1) {
+            int characterDamage = lanzarDado();
+            int enemyDamage = lanzarDado();
+
+            cout << "Atacas al enemigo y le haces " << characterDamage << " puntos de daño." << endl;
+            enemigo.setVida(enemigo.getVida() - characterDamage);
+
+            if (enemigo.getVida() > 0) {
+                cout << "El enemigo te ataca y te hace " << enemyDamage << " puntos de daño." << endl;
+                personaje.setVida(personaje.getVida() - enemyDamage);
+            }
+        }
+        else if (eleccion == 2) {
+            string objeto;
+            cout << "Introduce el nombre del objeto que deseas usar: ";
+            cin.ignore();
+            getline(cin, objeto);
+            int vidaPersonaje = personaje.getVida();
+            personaje.usarObjeto(objeto, vidaPersonaje);
+        }
+        else if (eleccion == 3) {
+            cout << "Inventario:" << endl;
+            for (auto& entry : personaje.getInventario()) {
+                cout << entry.first << " - Descripción: " << entry.second["descripcion"] << ", Tipo: " << entry.second["tipo"];
+                cout << ", Cantidad: " << entry.second["cantidad"] << endl;
+            }
+        }
+    }
+
+    if (personaje.getVida() > 0) {
+        cout << "¡Has derrotado al enemigo!" << endl;
+    }
+    else {
+        cout << "Has sido derrotado..." << endl;
+    }
+}
+void combateBoss(Personaje& personaje, Boss& boss) {
+    cout << "¡Un boss ha aparecido! ¡Prepárate para la batalla, " << personaje.getNombre() << "!" << endl;
+
+    while (personaje.getVida() > 0 && boss.getVida() > 0) {
+        cout << "\nTu HP: " << personaje.getVida() << " | HP del boss (" << boss.getNombre() << "): " << boss.getVida() << endl;
+
+        cout << "Opciones de combate:" << endl;
+        cout << "1. Atacar" << endl;
+        cout << "2. Usar Objeto" << endl;
+        cout << "3. Mostrar inventario" << endl;
+        cout << "Elige tu acción: ";
+        int eleccion;
+        cin >> eleccion;
+
+        if (eleccion == 1) {
+            int characterDamage = lanzarDado();
+            int enemyDamage = lanzarDado();
+
+            cout << "Atacas al boss y le haces " << characterDamage << " puntos de daño." << endl;
+            boss.setVida(boss.getVida() - characterDamage);
+
+            if (boss.getVida() > 0) {
+                if (rand() % 2 == 0) {
+                    cout << "El boss te ataca y te hace " << enemyDamage << " puntos de daño." << endl;
+                    personaje.setVida(personaje.getVida() - enemyDamage);
+                }
+                else {
+                    boss.usarAtaqueEspecial(personaje);
+                }
+            }
+        }
+        else if (eleccion == 2) {
+            string objeto;
+            cout << "Introduce el nombre del objeto que deseas usar: ";
+            cin.ignore();
+            getline(cin, objeto);
+            int vidaPersonaje = personaje.getVida();
+            personaje.usarObjeto(objeto, vidaPersonaje);
+        }
+        else if (eleccion == 3) {
+            cout << "Inventario:" << endl;
+            for (auto& entry : personaje.getInventario()) {
+                cout << entry.first << " - Descripción: " << entry.second["descripcion"] << ", Tipo: " << entry.second["tipo"];
+                cout << ", Cantidad: " << entry.second["cantidad"] << endl;
+            }
+        }
+    }
+
+    if (personaje.getVida() > 0) {
+        cout << "¡Has derrotado al boss!" << endl;
+    }
+    else {
+        cout << "Has sido derrotado por el boss..." << endl;
+    }
+}
+void actualizarPosicion(char movimiento) {
+    int newX = x;
+    int newY = y;
+
+    switch (movimiento) {
+    case 'w':
+        newX--;
+        break;
+    case 's':
+        newX++;
+        break;
+    case 'a':
+        newY--;
+        break;
+    case 'd':
+        newY++;
+        break;
+    default:
+        cout << "Movimiento no válido" << endl;
+        return;
+    }
+    if (rand() % 10 == 0) {
+
+        combate(miPersonaje, miEnemigo);
+    }
+    if (rand() % 50 == 0) {
+        
+        Boss miBoss("Boss Final", 150, 20);
+        combateBoss(miPersonaje, miBoss);
+    }
+    
+    if (newX > 0 && newX < 29 && newY > 25 && newY < 149) {
+        entorno[x][y] = ' ';
+        x = newX;
+        y = newY;
+        entorno[x][y] = 'K';
+    }
+    else {
+        cout << "Movimiento fuera de límites" << endl;
+    }
+    if (entorno[y][x] == '*') {
+        cout << "Has recogido un objeto, accede al inventario para ver qué objeto es." << endl;
+        recogerObjeto();
+    }
+    if (entorno[y][x] == 'I') {
+        system("cls");
+        combate(miPersonaje, miEnemigo);
+        
+    }
+}
+
+
+void mostrarmenu() {
+    cout << "           __________________________________________________________________________________________________________________________________________" << endl;
+    cout << "          [__________________________________________________________________________________________________________________________________________] " << endl;
+    cout << "           ||                                                                                                                                      ||    " << endl;
+    cout << "           ||                                                                                                                                      ||    " << endl;
+    cout << "           ||                          .I.                                                                               .I.                       ||      " << endl;
+    cout << "           ||                         / : \\                                                                             / : \\                      ||         " << endl;
+    cout << "           ||                         |===|                                                                             |===|                      ||         " << endl;
+    cout << "           ||                         >._.<                                                                             >._.<                      ||        " << endl;
+    cout << "           ||                     .=-<     >-=.                                                                     .=-<     >-=.                  ||            " << endl;
+    cout << "           ||                    /.'`(`-+-')'`.\\                                                                   /.'`(`-+-')'`.\\                 ||                   " << endl;
+    cout << "           ||                  _/`.__/  :  \\__.'\\_                                                               _/`.__/  :  \\__.'\\_               ||                          " << endl;
+    cout << "           ||                 ( `._/\\`. : .'/\\_.' )                                                             ( `._/\\`. : .'/\\_.' )              ||                            " << endl;
+    cout << "           ||                  >-(_) \\ `:' / (_)-<                                                               >-(_) \\ `:' / (_)-<               ||                        " << endl;
+    cout << "           ||                  | |  / \\___/ \\  | |                                                               | |  / \\___/ \\  | |               ||                         " << endl;
+    cout << "           ||                  )^( | .' : `. | )^(                       1. Iniciar Juego                        )^( | .' : `. | )^(               ||                      " << endl;
+    cout << "           ||                 |  _\\|`-._:_.-'| \\  |                      2. Configuracion                       |  _\\|`-._:_.-'| \\  |              ||                            " << endl;
+    cout << "           ||                  -< \\)  : | :  |  -                        3. Sistema                              -< \\)| : | : | -                  ||                        " << endl;
+    cout << "           ||                   (\\\\| : / \\ : |                           4. Informacion                           (\\\\| : / \\ : |                   ||                      " << endl;
+    cout << "           ||                     \\\\-:-| |-:-|                           5. Salir del Juego                         \\\\-:-| |-:-|                   ||                   " << endl;
+    cout << "           ||                      \\\\:_/ \\_:_/                                                                       \\\\:_/ \\_:_/                   ||                  " << endl;
+    cout << "           ||                      |\\\\_| |_:_|                                                                       |\\\\_| |_:_|                   ||                 " << endl;
+    cout << "           ||                      (;\\\\/ \\__;)                                                                       (;\\\\/ \\__;)                   ||                   " << endl;
+    cout << "           ||                      |: \\\\  | :|                                                                       |: \\\\  | :|                   ||                 " << endl;
+    cout << "           ||                      \\: /\\\\ \\ :/                                                                       \\: /\\\\ \\ :/                   ||                     " << endl;
+    cout << "           ||                      |==| \\\\|==|                                                                       |==| \\\\|==|                   ||                   " << endl;
+    cout << "           ||                     /v-'(  \\\\`-v\\                                                                     /v-'(  \\\\`-v\\                  ||                      " << endl;
+    cout << "           ||                    // .-'   \\\\. \\\\                                                                   // .-'   \\\\. \\\\                 ||                         " << endl;
+    cout << "           ||                    `-'       \\\\`-'                                                                   `-'       \\\\`-'                 ||                     " << endl;
+    cout << "           ||                               \\|                                                                                \\|                   ||                              " << endl;
+    cout << "           ||                                                                                                                                      ||                   " << endl;
+    cout << "           ||                                                                                                                                      ||                   " << endl;
+    cout << "           ||______________________________________________________________________________________________________________________________________||                " << endl;
+    cout << "          [__________________________________________________________________________________________________________________________________________]                                                                                                                                                                                   " << endl;
+    cout << "                                                                                                                                                                           " << endl;
+
+}
+int main() {
+    srand(static_cast<unsigned int>(time(NULL)));
+    Personaje miPersonaje("Jugador", 100);
+    
+    
+    char opcis;
+    do {
+        cargarEstadoInicial();
+        mostrartitulo();
+        mostrarmenu();
+        cin >> opcis;
+        if (opcis == '1') {
+
+            mostrartitulo();
+            cout << "" << endl;
+            cout << "" << endl;
+            cout << "" << endl;
+            cout << "" << endl;
+            cout << "" << endl;
+            cout << "" << endl;
+            cout << "" << endl;
+            cout << "" << endl;
+            cout << "" << endl;
+            cout << "" << endl;
+            cout << "" << endl;
+            cout << "" << endl;
+            cout << "" << endl;
+            cout << "                                                                         ";
+            cout << "Partidas" << endl;
+            string ranuras[3];
+
+            cout << "" << endl;
+            for (int i = 0; i < 3; ++i) {
+                cout << "                                                                         ";
+                ranuras[i] = (partidasIniciadas[i] ? "Partida " + to_string(i + 1) : "Ranura Vacia " + to_string(i + 1));
+                cout << (i + 1) << ". " << ranuras[i] << endl;
+            }
+            cout << "                                                                         4. Salir" << endl;
+            cout << "                                                                         ";
+            int carpar;
+            cin >> carpar;
+            if (carpar >= 1 && carpar <= 3) {
+                int partidaIndex = carpar - 1;
+                if (!partidasIniciadas[partidaIndex]) {
+                    cout << "                                                                Quieres iniciar una nueva partida (si/no) ";
+                    string inp;
+                    cin >> inp;
+                    if (inp == "si") {
+                        cout << "" << endl;
+                        cout << "                                                                      Introduce tu nombre: ";
+                        string characterName;
+                        cin >> characterName;
+                        mostrarlore();
+                        cout << "Pulsa una tecla y la tecla enter para continuar... ";
+                        std::cin.get();
+                        string w;
+                        cin >> w;
+                        if (w != "|") {
+                            system("cls");
+                            inicializarEntorno();
+                            x = 28;
+                            y = 28;
+                            entorno[y][x] = 'K';
+                            while (true) {
+                                dibujarEntorno();
+                                cout << "Introduce tu movimiento (W, A, S, D) o Q para salir: ";
+                                char movimiento;
+                                cin >> movimiento;
+
+                                if (movimiento == 'q') {
+                                    cout << "Quieres Guardar Partida? (si/no): ";
+                                    string gur;
+                                    cin >> gur;
+                                    if (gur == "si") {
+                                        guardarJuego({ x, y }, partidaIndex);
+                                    }
+                                    break;
+                                }
+                                else if (movimiento == 'g') {
+                                    cout << "Quieres Guardar Partida? (si/no): ";
+                                    string gur;
+                                    cin >> gur;
+                                    if (gur == "si") {
+                                        guardarJuego({ x, y }, partidaIndex);
+                                    }
+                                }
+                                else if (movimiento == 'e') {
+                                    guardarJuego({ x, y }, partidaIndex);
+                                    string opcion;
+                                    while (true) {
+                                        menu();
+                                        cout << "Seleccione una opción (1-3): ";
+                                        cin >> opcion;
+
+                                        if (opcion == "1") {
+                                            string objetoNombre;
+                                            cout << "Nombre del objeto a usar: ";
+                                            cin >> objetoNombre;
+                                            
+                                        }
+                                        else if (opcion == "2") {
+                                            cout << "Inventario:" << endl;
+                                            for (auto& entry : inventario) {
+                                                cout << entry.first << " - Descripción: " << entry.second["descripcion"] << ", Tipo: " << entry.second["tipo"];
+                                                cout << ", Cantidad: " << entry.second["cantidad"] << endl;
+                                            }
+                                        }
+                                        else if (opcion == "3") {
+                                            cout << "Saliendo del inventario" << endl;
+                                            break;
+                                        }
+                                        else {
+                                            cout << "Opción no válida. Intente nuevamente." << endl;
+                                        }
+                                    }
+                                }
+                                else {
+                                    actualizarPosicion(movimiento);
+                                }
+                            }
+                        }
+
+                    }
+                }
+                else {
+                    cout << " Opciones:" << endl;
+                    cout << " 1. Iniciar Partida";
+                    cout << " 2. Borrar Partida";
+                    int inipartida;
+                    cin >> inipartida;
+                    if (inipartida == 1) {
+                        inicializarEntorno();
+                        int danio = 0;
+                        EstadoJuego estado = cargarJuego(partidaIndex);
+                        x = estado.x;
+                        y = estado.y;
+                        entorno[y][x] = 'K';
+
+                        while (true) {
+                            dibujarEntorno();
+                            cout << "Introduce tu movimiento (W, A, S, D) E par in/ Q para salir: ";
+                            char movimiento;
+                            cin >> movimiento;
+
+                            if (movimiento == 'q') {
+                                cout << "¿Quieres guardar la partida antes de salir? (si/no): ";
+                                string respuesta;
+                                cin >> respuesta;
+                                if (respuesta == "si") {
+                                    guardarJuego({ x, y }, partidaIndex);
+                                }
+                                break;
+                            }
+                            else if (movimiento == 'e') {
+                                string opcion;
+                                while (true) {
+                                    menu();
+                                    cout << "Seleccione una opción (1-3): ";
+                                    cin >> opcion;
+
+                                    if (opcion == "1") {
+                                        string objetoNombre;
+                                        cout << "Nombre del objeto a usar: ";
+                                        cin >> objetoNombre;
+                                        usarObjeto(objetoNombre, danio);
+                                    }
+                                    else if (opcion == "2") {
+                                        cout << "Inventario:" << endl;
+                                        for (auto& entry : inventario) {
+                                            cout << entry.first << " - Descripción: " << entry.second["descripcion"] << ", Tipo: " << entry.second["tipo"];
+                                            cout << ", Cantidad: " << entry.second["cantidad"] << endl;
+                                        }
+                                    }
+                                    else if (opcion == "3") {
+                                        cout << "Saliendo del inventario" << endl;
+                                        break;
+                                    }
+                                    else {
+                                        cout << "Opción no válida. Intente nuevamente." << endl;
+                                    }
+                                }
+                            }
+                            else {
+                                actualizarPosicion(movimiento);
+                            }
+                        }
+                    }
+                    else if (inipartida == 2) {
+
+                        if (remove(archivosPartidas[partidaIndex].c_str()) == 0) {
+                            cout << "Archivo de la partida eliminado exitosamente." << endl;
+                        }
+                        else {
+                            cout << "Error al eliminar el archivo de la partida." << endl;
+                        }
+
+                        if (remove(archivosInventario[partidaIndex].c_str()) == 0) {
+                            cout << "Archivo de inventario eliminado exitosamente." << endl;
+                        }
+                        else {
+                            cout << "Error al eliminar el archivo de inventario." << endl;
+                        }
+
+                        partidasIniciadas[partidaIndex] = false;
+                    }
+                }
+            }
+            else if (carpar == 4) {
+                break;
+            }
+        }
+        else if (opcis == '2') {
+            // Configuracion
+        }
+        else if (opcis == '3') {
+            // Sistema
+        }
+        else if (opcis == '4') {
+            // Informacion
+        }
+        else if (opcis == '5') {
+            break;
+        }
+        else {
+            cout << "Opción no válida. Intente nuevamente." << endl;
+        }
+    } while (true);
+
+    return 0;
+}
